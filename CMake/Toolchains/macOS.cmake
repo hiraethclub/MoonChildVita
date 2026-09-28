@@ -1,0 +1,5 @@
+set(CMAKE_SYSTEM_NAME Darwin)
+
+if(NOT DEFINED MOONCHILD_TARGET_ARCH)
+    set(MOONCHILD_TARGET_ARCH "macOSUniversal")
+endif()

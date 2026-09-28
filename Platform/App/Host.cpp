@@ -1,0 +1,306 @@
+#include "Host.h"
+
+#include "AudioBridge.h"
+#include "DisplayBridge.h"
+#include "InputBridge.h"
+#include "MovieBridge.h"
+#include "PlatformConfig.h"
+#include "Resources.h"
+
+extern unsigned short gamespeedflg;
+
+#define _IN_MAIN
+#include "frm_int.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#else
+#include <thread>
+#endif
+
+extern int g_SettingsFlg;
+extern int g_ReqKeyFlg;
+extern int g_KeyTimeOut;
+extern int g_MouseFlg;
+extern int g_MouseDeltaX;
+extern int g_MouseDeltaY;
+extern unsigned short mouselchng;
+extern unsigned short mouserchng;
+extern void framework_EventHandle(int event, int param);
+extern HEARTBEAT_FN framework_InitGame(Cvideo* video, Caudio* audio, Ctimer* timer, Cmovie* movie);
+extern void framework_ExitGame(void);
+
+static void ResetFrameworkState()
+{
+    g_SettingsFlg = 0;
+    g_ReqKeyFlg = 0;
+    g_KeyTimeOut = 0;
+    gbGameLoop = true;
+    heartbeat = nullptr;
+    lvideo = nullptr;
+    laudio = nullptr;
+    ltimer = nullptr;
+    lmovie = nullptr;
+}
+
+Host::Host()
+{
+    Backends = MakeDefaultBackends();
+}
+
+Host::~Host() = default;
+
+bool Host::Initialize()
+{
+    Running = true;
+    Ready = false;
+    Accumulator = 0;
+
+    if (!Backends.Window->Create("Moon Child FE", 640, 480))
+    {
+        return false;
+    }
+
+    if (!Backends.Renderer->Init(Backends.Window.get()))
+    {
+        printf("Renderer backend initialization failed!\n");
+        Backends.Window->Destroy();
+        return false;
+    }
+
+    if (!Backends.Input->Init())
+    {
+        printf("Input backend initialization failed!\n");
+        Backends.Renderer->Destroy();
+        Backends.Window->Destroy();
+        return false;
+    }
+
+    if (!Backends.Audio->Init())
+    {
+        printf("Audio backend initialization failed!\n");
+        Backends.Input->Destroy();
+        Backends.Renderer->Destroy();
+        Backends.Window->Destroy();
+        return false;
+    }
+
+    PixelBuffer.reset(new unsigned char[GAME_FRAMEBUFFER_WIDTH * GAME_FRAMEBUFFER_HEIGHT * 4]);
+    std::memset(PixelBuffer.get(), 0, GAME_FRAMEBUFFER_WIDTH * GAME_FRAMEBUFFER_HEIGHT * 4);
+
+    AudioBridge::Attach(Backends.Audio.get());
+    DisplayBridge::Attach(Backends.Window.get(), Backends.Renderer.get());
+    InputBridge::Attach(Backends.Input.get());
+    MovieBridge::Attach(Backends.Audio.get(), PixelBuffer.get(), GAME_FRAMEBUFFER_WIDTH, GAME_FRAMEBUFFER_HEIGHT);
+
+    if (!InitializeFramework())
+    {
+        printf("Framework initialization failed!\n");
+        DetachBridges();
+        Backends.Audio->Destroy();
+        Backends.Input->Destroy();
+        Backends.Renderer->Destroy();
+        Backends.Window->Destroy();
+        PixelBuffer.reset();
+        return false;
+    }
+
+    LoadProgress();
+
+    PreviousFrameTime = std::chrono::steady_clock::now();
+    Ready = true;
+    return true;
+}
+
+void Host::Shutdown()
+{
+    if (!Ready)
+    {
+        return;
+    }
+
+    SaveProgress();
+    ShutdownFramework();
+
+    DetachBridges();
+
+    Backends.Audio->Destroy();
+    Backends.Input->Destroy();
+    Backends.Renderer->Destroy();
+    Backends.Window->Destroy();
+
+    PixelBuffer.reset();
+    Ready = false;
+}
+
+void Host::RunFrame()
+{
+    if (!Running)
+    {
+        return;
+    }
+
+    bool exitRequested = false;
+    Backends.Window->SetRelativeMouseMode(framework_WantRelativeMouse() != 0);
+    Backends.Window->PumpOSEvents(Backends.Input.get(), exitRequested);
+
+    const int fps = (gamespeedflg == 1u) ? 50 : 60;
+    const bool shouldShow = framework_ShouldShowCursor() != 0 && (InputBridge::GetMouseIdleFrames() < 3 * fps);
+    if (lvideo != nullptr)
+    {
+        lvideo->set_cursor_visibility(shouldShow ? 1 : 0);
+    }
+
+    if (exitRequested)
+    {
+        Running = false;
+    }
+
+    const auto current = std::chrono::steady_clock::now(); // cato wouldn't be proud of me
+
+    const uint64_t deltaNs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(current - PreviousFrameTime).count()); // c++ is a mess
+
+    PreviousFrameTime = current;
+
+    const uint64_t tickNs =
+        (gamespeedflg == 1u) ? GAME_FRAME_DURATION_NS_50 : GAME_FRAME_DURATION_NS_60;
+    const double tickDuration = tickNs / 1e9;
+
+    Accumulator += deltaNs;
+    Accumulator = std::min<uint64_t>(Accumulator, tickNs * 5ull);
+
+    bool advancedFrame = false;
+    while (Accumulator >= tickNs && Running)
+    {
+        InputBridge::Tick();
+        InputEvent inputEvent;
+        while (InputBridge::PollNext(inputEvent))
+        {
+            if (inputEvent.Code != 0)
+            {
+                framework_EventHandle(inputEvent.IsDown ? FW_KEYDOWN : FW_KEYUP, inputEvent.Code);
+            }
+        }
+        TickFramework(tickDuration);
+        Accumulator -= tickNs;
+        advancedFrame = true;
+    }
+
+    if (advancedFrame && Running)
+    {
+        Backends.Renderer->BeginFrame();
+        Backends.Renderer->DrawFrame(PixelBuffer.get(), GAME_FRAMEBUFFER_WIDTH, GAME_FRAMEBUFFER_HEIGHT);
+        Backends.Renderer->EndFrame();
+    }
+}
+
+void Host::DetachBridges()
+{
+    MovieBridge::Detach();
+    InputBridge::Detach();
+    DisplayBridge::Detach();
+    AudioBridge::Detach();
+}
+
+bool Host::InitializeFramework()
+{
+    std::unique_ptr<Cvideo> video(new Cvideo());
+    std::unique_ptr<Caudio> audio(new Caudio());
+    std::unique_ptr<Ctimer> timer(new Ctimer());
+    std::unique_ptr<Cmovie> movie(new Cmovie(audio.get()));
+
+    ResetFrameworkState();
+    lvideo = video.get();
+    laudio = audio.get();
+    ltimer = timer.get();
+    lmovie = movie.get();
+
+    if (!lvideo->on(PixelBuffer.get(), GAME_FRAMEBUFFER_WIDTH, GAME_FRAMEBUFFER_HEIGHT, 256))
+    {
+        ResetFrameworkState();
+        return false;
+    }
+
+    heartbeat = framework_InitGame(lvideo, laudio, ltimer, lmovie);
+    if (heartbeat == nullptr)
+    {
+        ResetFrameworkState();
+        return false;
+    }
+
+    video.release();
+    audio.release();
+    timer.release();
+    movie.release();
+    return true;
+}
+
+void Host::ShutdownFramework()
+{
+    framework_ExitGame();
+
+    delete lmovie;
+    delete ltimer;
+    delete laudio;
+    delete lvideo;
+
+    ResetFrameworkState();
+}
+
+void Host::TickFramework(double tickDuration)
+{
+    MovieBridge::Tick(tickDuration);
+
+    heartbeat = reinterpret_cast<HEARTBEAT_FN>(heartbeat());
+
+    g_MouseFlg = 0;
+    g_MouseDeltaX = 0;
+    g_MouseDeltaY = 0;
+    mouselchng = 0;
+    mouserchng = 0;
+
+    if (heartbeat == nullptr)
+    {
+        Running = false;
+    }
+}
+
+#ifdef __EMSCRIPTEN__
+void EmscriptenMainLoop(void* userData)
+{
+    Host* host = static_cast<Host*>(userData);
+    host->RunFrame();
+    if (!host->Running)
+    {
+        host->Shutdown();
+        emscripten_cancel_main_loop();
+    }
+}
+#endif
+
+int Host::Run()
+{
+    if (!Initialize())
+    {
+        return 1;
+    }
+
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop_arg(EmscriptenMainLoop, this, 0, 1);
+#else
+    while (Running)
+    {
+        RunFrame();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Shutdown();
+#endif
+
+    return 0;
+}
