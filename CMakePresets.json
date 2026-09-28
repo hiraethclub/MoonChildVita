@@ -94,6 +94,20 @@
         "CMAKE_OSX_ARCHITECTURES": "x86_64;arm64",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0"
       }
+    },
+    {
+      "name": "vita",
+      "generator": "Ninja",
+      "toolchainFile": "${sourceDir}/CMake/Toolchains/Vita.cmake",
+      "binaryDir": "${sourceDir}/CMakeOut/Vita",
+      "cacheVariables": {
+        "MOONCHILD_TARGET_ARCH": "Vita",
+        "CMAKE_BUILD_TYPE": "Release",
+        "MOONCHILD_VENDORED_SDL3": "OFF",
+        "MOONCHILD_VENDORED_GAMECONTROLLERDB": "OFF",
+        "CMAKE_C_FLAGS_RELEASE": "-O2 -g",
+        "CMAKE_CXX_FLAGS_RELEASE": "-O2 -g"
+      }
     }
   ],
   "buildPresets": [
@@ -156,6 +170,10 @@
       "name": "build-macosuniversal-release",
       "configurePreset": "macosuniversal",
       "configuration": "Release"
+    },
+    {
+      "name": "build-vita-release",
+      "configurePreset": "vita"
     }
   ]
 }

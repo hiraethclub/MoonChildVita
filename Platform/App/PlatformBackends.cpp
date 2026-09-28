@@ -16,6 +16,10 @@
 #include "GLESRenderer.h"
 #endif
 
+#ifdef MOONCHILD_RENDERER_VITA
+#include "VitaRenderer.h"
+#endif
+
 #ifdef MOONCHILD_INPUT_SDL3
 #include "SDL3Input.h"
 #endif
@@ -46,6 +50,8 @@ PlatformBackends MakeDefaultBackends()
     backends.Renderer.reset(new OpenGLRenderer());
 #elif defined(MOONCHILD_RENDERER_GLES)
     backends.Renderer.reset(new GLESRenderer());
+#elif defined(MOONCHILD_RENDERER_VITA)
+    backends.Renderer.reset(new VitaRenderer());
 #endif
 
 #if defined(MOONCHILD_INPUT_SDL2)

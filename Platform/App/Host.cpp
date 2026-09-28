@@ -7,6 +7,10 @@
 #include "PlatformConfig.h"
 #include "Resources.h"
 
+#ifdef MOONCHILD_VITA
+#include "VitaPlatform.h"
+#endif
+
 extern unsigned short gamespeedflg;
 
 #define _IN_MAIN
@@ -89,6 +93,10 @@ bool Host::Initialize()
         Backends.Window->Destroy();
         return false;
     }
+
+#ifdef MOONCHILD_VITA
+    VitaPlatform::LogBackendInfo();
+#endif
 
     PixelBuffer.reset(new unsigned char[GAME_FRAMEBUFFER_WIDTH * GAME_FRAMEBUFFER_HEIGHT * 4]);
     std::memset(PixelBuffer.get(), 0, GAME_FRAMEBUFFER_WIDTH * GAME_FRAMEBUFFER_HEIGHT * 4);

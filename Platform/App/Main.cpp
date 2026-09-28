@@ -1,14 +1,28 @@
 #include "Host.h"
 
+#ifdef MOONCHILD_VITA
+#include "VitaPlatform.h"
+#endif
+
 static int TheBeginningOfANewAndExcitinglyDifferentStory()
 {
+#ifdef MOONCHILD_VITA
+    VitaPlatform::Startup();
+#endif
+
 #ifdef __EMSCRIPTEN__
     static Host host;
 #else
     Host host;
 #endif
 
-    return host.Run();
+    const int result = host.Run();
+
+#ifdef MOONCHILD_VITA
+    VitaPlatform::Shutdown(result);
+#endif
+
+    return result;
 }
 
 #if defined(_WIN32) && !defined(__EMSCRIPTEN__)

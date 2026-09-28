@@ -1,0 +1,39 @@
+name: PS Vita
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vita:
+    name: PS Vita VPK
+    runs-on: ubuntu-latest
+    # Same pinned image as Scripts/BuildGameVita.sh
+    container: vitasdk/vitasdk@sha256:fd82d88ff456d118eef16533ebf9a3a6ae0e292684fb8a3a35f15f0707b4692d
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # The Vita build uses the SDL3 packaged with VitaSDK, so only these submodules are needed
+    - name: Fetch submodules
+      run: |
+        git config --global --add safe.directory '*'
+        git submodule update --init --depth 1 Libraries/zlib Libraries/pl_mpeg
+
+    - name: Build
+      run: bash Scripts/BuildGameVita.sh
+      env:
+        NO_COLOR: "1"
+
+    - name: Upload the CI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MoonChildFE-Vita
+        path: |
+          Bin/Vita/*.vpk
+          Bin/Vita/*.elf
+        if-no-files-found: error

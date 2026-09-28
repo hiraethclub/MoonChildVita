@@ -14,6 +14,9 @@
 #include <climits>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(MOONCHILD_VITA) && !defined(PATH_MAX)
+#define PATH_MAX 1024
+#endif
 #ifndef MAX_PATH
 #define MAX_PATH PATH_MAX
 #endif
@@ -25,6 +28,11 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#endif
+
+#ifdef MOONCHILD_VITA
+#include "VitaLog.h"
+#include "VitaPlatform.h"
 #endif
 
 static char BasePath[MAX_PATH];
@@ -101,6 +109,16 @@ static void EnsureBasePath()
     std::snprintf(BasePath, sizeof(BasePath), "/");
     std::snprintf(DataPath, sizeof(DataPath), "/data/");
     std::snprintf(WritablePath, sizeof(WritablePath), "/persistent/");
+#elif defined(MOONCHILD_VITA)
+    std::snprintf(BasePath, sizeof(BasePath), "app0:");
+    std::snprintf(DataPath, sizeof(DataPath), "%s", VITA_DATA_DIR);
+    std::snprintf(WritablePath, sizeof(WritablePath), "%s", VITA_WRITABLE_DIR);
+    if (!CreateDirectoryIfMissing("ux0:data/MoonChildFE"))
+    {
+        VitaLog::Write("Could not create %s", WritablePath);
+    }
+    VitaLog::Write("Data path: %s", DataPath);
+    VitaLog::Write("Writable path: %s", WritablePath);
 #else
     char exeDir[MAX_PATH];
     exeDir[0] = '\0';
@@ -237,6 +255,9 @@ const char* FullPath(const char* file)
 {
     EnsureBasePath();
     std::snprintf(FullPathBuf, sizeof(FullPathBuf), "%s%s", DataPath, file);
+#ifdef MOONCHILD_VITA
+    VitaLog::NotePath(FullPathBuf);
+#endif
     return FullPathBuf;
 }
 
@@ -244,6 +265,9 @@ const char* FullWritablePath(const char* file)
 {
     EnsureBasePath();
     std::snprintf(WritablePathBuf, sizeof(WritablePathBuf), "%s%s", WritablePath, file);
+#ifdef MOONCHILD_VITA
+    VitaLog::NotePath(WritablePathBuf);
+#endif
     return WritablePathBuf;
 }
 
