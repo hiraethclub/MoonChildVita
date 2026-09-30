@@ -1,13 +1,15 @@
 # Vita builds
 
-GitHub rejects files over 100 MB, so each VPK is split into parts. Join them on a PC, then copy the `.vpk` to the Vita and install it with VitaShell.
+GitHub rejects files over 100 MB, so each VPK is split into parts. Join them on a PC, then copy the `.vpk` to the Vita and install it with VitaShell. Replace `NAME` below with the file name without `.partNNN`, for example `MoonChildFE-vita-0.2.0-d7ee476.vpk`.
 
 Windows (Command Prompt, in this folder):
 
-    copy /b MoonChildFE-vita-0.1.0-b26769a.vpk.part000 + MoonChildFE-vita-0.1.0-b26769a.vpk.part001 MoonChildFE-vita-0.1.0-b26769a.vpk
+    copy /b NAME.part000 + NAME.part001 NAME
 
 macOS / Linux:
 
-    cat MoonChildFE-vita-0.1.0-b26769a.vpk.part* > MoonChildFE-vita-0.1.0-b26769a.vpk
+    cat NAME.part* > NAME
 
-Check the result against the `.sha256` file (`certutil -hashfile <file> SHA256` on Windows, `sha256sum -c *.sha256` elsewhere).
+Check the result against the `.sha256` file (`certutil -hashfile NAME SHA256` on Windows, `sha256sum -c NAME.sha256` elsewhere).
+
+Older builds are in the git history of this folder. Every push also builds the VPK in GitHub Actions (artifact `MoonChildFE-Vita`), which needs no joining.
