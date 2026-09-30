@@ -101,7 +101,12 @@ bool SDL3Window::Create(const char* title, int width, int height)
         return false;
     }
 
+#ifdef MOONCHILD_VITA
+    // The menus work fine with the buttons, and stray touches shouldn't click things
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+#else
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "1");
+#endif
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 

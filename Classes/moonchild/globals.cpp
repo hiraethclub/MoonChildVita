@@ -88,7 +88,9 @@ UINT16 vgaflg=1;
 UINT16 animsflg=1;
 UINT16 easiervisualsflg=0;
 UINT16 easiershootflg=0;
-#ifdef MOONCHILD_DESKTOP_MODE
+#if defined(MOONCHILD_VITA)
+UINT16 fullscreenflg=0;
+#elif defined(MOONCHILD_DESKTOP_MODE)
 UINT16 fullscreenflg=1;
 #endif
 UINT16 gamespeedflg=0;

@@ -1,7 +1,14 @@
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Vita port versioning, separate from the game's own version
-set(MOONCHILD_VITA_VERSION "0.1.0" CACHE STRING "Version of the Vita port")
+# Bump MOONCHILD_VITA_VERSION_DEFAULT for every build handed over
+set(MOONCHILD_VITA_VERSION_DEFAULT "0.2.0")
+set(MOONCHILD_VITA_VERSION "" CACHE STRING "Override the Vita port version (empty uses the default)")
+if(MOONCHILD_VITA_VERSION STREQUAL "")
+    set(MOONCHILD_VITA_VERSION_EFFECTIVE "${MOONCHILD_VITA_VERSION_DEFAULT}")
+else()
+    set(MOONCHILD_VITA_VERSION_EFFECTIVE "${MOONCHILD_VITA_VERSION}")
+endif()
 set(MOONCHILD_VITA_TITLE_ID "MCFE01997" CACHE STRING "Vita homebrew title ID (4 letters + 5 digits)")
 set(MOONCHILD_GIT_HASH "" CACHE STRING "Short git hash to embed, detected automatically if empty")
 
@@ -26,9 +33,9 @@ else()
 endif()
 
 # param.sfo wants APP_VER as ##.##, so 0.1.0 becomes 00.10
-string(REGEX MATCH "^([0-9]+)\\.([0-9])\\.([0-9])$" MOONCHILD_VITA_VERSION_OK "${MOONCHILD_VITA_VERSION}")
+string(REGEX MATCH "^([0-9]+)\\.([0-9])\\.([0-9])$" MOONCHILD_VITA_VERSION_OK "${MOONCHILD_VITA_VERSION_EFFECTIVE}")
 if(NOT MOONCHILD_VITA_VERSION_OK)
-    message(FATAL_ERROR "MOONCHILD_VITA_VERSION must look like X.Y.Z with single digit Y and Z, got ${MOONCHILD_VITA_VERSION}")
+    message(FATAL_ERROR "MOONCHILD_VITA_VERSION must look like X.Y.Z with single digit Y and Z, got ${MOONCHILD_VITA_VERSION_EFFECTIVE}")
 endif()
 if(CMAKE_MATCH_1 LESS 10)
     set(MOONCHILD_VITA_APP_VER "0${CMAKE_MATCH_1}.${CMAKE_MATCH_2}${CMAKE_MATCH_3}")
@@ -36,11 +43,12 @@ else()
     set(MOONCHILD_VITA_APP_VER "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}${CMAKE_MATCH_3}")
 endif()
 
-message(STATUS "Vita port ${MOONCHILD_VITA_VERSION} (APP_VER ${MOONCHILD_VITA_APP_VER}), git ${MOONCHILD_GIT_HASH_EFFECTIVE}, title ID ${MOONCHILD_VITA_TITLE_ID}")
+message(STATUS "Vita port ${MOONCHILD_VITA_VERSION_EFFECTIVE} (APP_VER ${MOONCHILD_VITA_APP_VER}), git ${MOONCHILD_GIT_HASH_EFFECTIVE}, title ID ${MOONCHILD_VITA_TITLE_ID}")
 
 target_sources(${EXECUTABLE_NAME} PRIVATE
     ${MOONCHILD_PLATFORM_DIR}/Vita/VitaLog.cpp
     ${MOONCHILD_PLATFORM_DIR}/Vita/VitaPlatform.cpp
+    ${MOONCHILD_PLATFORM_DIR}/Vita/VitaStats.cpp
 )
 
 target_include_directories(${EXECUTABLE_NAME} PRIVATE
@@ -48,7 +56,7 @@ target_include_directories(${EXECUTABLE_NAME} PRIVATE
 )
 
 target_compile_definitions(${EXECUTABLE_NAME} PRIVATE
-    "MOONCHILD_VITA_VERSION_STR=\"${MOONCHILD_VITA_VERSION}\""
+    "MOONCHILD_VITA_VERSION_STR=\"${MOONCHILD_VITA_VERSION_EFFECTIVE}\""
     "MOONCHILD_GIT_HASH_STR=\"${MOONCHILD_GIT_HASH_EFFECTIVE}\""
 )
 
@@ -67,4 +75,4 @@ vita_create_vpk(${EXECUTABLE_NAME}.vpk ${MOONCHILD_VITA_TITLE_ID} eboot.bin
 
 # Read by Scripts/BuildGameVita.sh to name the VPK
 file(WRITE ${CMAKE_BINARY_DIR}/VitaBuildInfo.txt
-    "VERSION=${MOONCHILD_VITA_VERSION}\nHASH=${MOONCHILD_GIT_HASH_EFFECTIVE}\nTITLE_ID=${MOONCHILD_VITA_TITLE_ID}\n")
+    "VERSION=${MOONCHILD_VITA_VERSION_EFFECTIVE}\nHASH=${MOONCHILD_GIT_HASH_EFFECTIVE}\nTITLE_ID=${MOONCHILD_VITA_TITLE_ID}\n")

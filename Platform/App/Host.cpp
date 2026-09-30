@@ -9,6 +9,12 @@
 
 #ifdef MOONCHILD_VITA
 #include "VitaPlatform.h"
+#include "VitaStats.h"
+#define MC_VITA_STAT_BEGIN(section) VitaStats::Begin(VitaStats::section)
+#define MC_VITA_STAT_END(section) VitaStats::End(VitaStats::section)
+#else
+#define MC_VITA_STAT_BEGIN(section) ((void)0)
+#define MC_VITA_STAT_END(section) ((void)0)
 #endif
 
 extern unsigned short gamespeedflg;
@@ -155,7 +161,9 @@ void Host::RunFrame()
 
     bool exitRequested = false;
     Backends.Window->SetRelativeMouseMode(framework_WantRelativeMouse() != 0);
+    MC_VITA_STAT_BEGIN(SECTION_EVENTS);
     Backends.Window->PumpOSEvents(Backends.Input.get(), exitRequested);
+    MC_VITA_STAT_END(SECTION_EVENTS);
 
     const int fps = (gamespeedflg == 1u) ? 50 : 60;
     const bool shouldShow = framework_ShouldShowCursor() != 0 && (InputBridge::GetMouseIdleFrames() < 3 * fps);
@@ -186,6 +194,7 @@ void Host::RunFrame()
     bool advancedFrame = false;
     while (Accumulator >= tickNs && Running)
     {
+        MC_VITA_STAT_BEGIN(SECTION_TICKS);
         InputBridge::Tick();
         InputEvent inputEvent;
         while (InputBridge::PollNext(inputEvent))
@@ -196,6 +205,7 @@ void Host::RunFrame()
             }
         }
         TickFramework(tickDuration);
+        MC_VITA_STAT_END(SECTION_TICKS);
         Accumulator -= tickNs;
         advancedFrame = true;
     }
@@ -263,7 +273,9 @@ void Host::ShutdownFramework()
 
 void Host::TickFramework(double tickDuration)
 {
+    MC_VITA_STAT_BEGIN(SECTION_MOVIE);
     MovieBridge::Tick(tickDuration);
+    MC_VITA_STAT_END(SECTION_MOVIE);
 
     heartbeat = reinterpret_cast<HEARTBEAT_FN>(heartbeat());
 

@@ -82,7 +82,11 @@ extern UINT16    easiershootflg;
 #define MC_GAME_SPEED_VSYNC 0u
 #define MC_GAME_SPEED_50HZ  1u
 #define MC_GAME_SPEED_60HZ  2u
-#ifdef MOONCHILD_DESKTOP_MODE
+// The Vita reuses the fullscreen toggle to pick between 1:1 and filling the screen
+#if defined(MOONCHILD_DESKTOP_MODE) || defined(MOONCHILD_VITA)
+#define MOONCHILD_FULLSCREEN_OPTION
+#endif
+#ifdef MOONCHILD_FULLSCREEN_OPTION
 extern UINT16    fullscreenflg;
 #endif
 extern UINT16    gamespeedflg;

@@ -3,6 +3,7 @@
 #include "PlatformConfig.h"
 #include "SDL3Window.h"
 #include "VitaLog.h"
+#include "VitaStats.h"
 
 #include <cstring>
 
@@ -66,12 +67,30 @@ bool VitaRenderer::Init(IWindow* hostWindow)
     }
     VitaLog::Write("Renderer: %d streaming textures of %dx%d created", TEXTURE_COUNT, w, h);
 
-    StatsStartNs = SDL_GetTicksNS();
+    // Without this, fill mode just falls back to 1:1
+    PrescaleTarget = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                       w * FILL_PRESCALE, h * FILL_PRESCALE);
+    if (PrescaleTarget != nullptr)
+    {
+        SDL_SetTextureScaleMode(PrescaleTarget, SDL_SCALEMODE_LINEAR);
+        SDL_SetTextureBlendMode(PrescaleTarget, SDL_BLENDMODE_NONE);
+        VitaLog::Write("Renderer: %dx%d prescale target created for fill mode", w * FILL_PRESCALE, h * FILL_PRESCALE);
+    }
+    else
+    {
+        VitaLog::Write("Prescale target creation failed, fill mode unavailable: %s", SDL_GetError());
+    }
+
     return true;
 }
 
 void VitaRenderer::Destroy()
 {
+    if (PrescaleTarget != nullptr)
+    {
+        SDL_DestroyTexture(PrescaleTarget);
+        PrescaleTarget = nullptr;
+    }
     for (int i = 0; i < TEXTURE_COUNT; ++i)
     {
         if (Textures[i] != nullptr)
@@ -99,7 +118,10 @@ void VitaRenderer::DrawFrame(const unsigned char* rgbaPixels, int width, int hei
     CurrentTexture = (CurrentTexture + 1) % TEXTURE_COUNT;
     SDL_Texture* texture = Textures[CurrentTexture];
 
-    if (!SDL_UpdateTexture(texture, nullptr, rgbaPixels, width * 4))
+    VitaStats::Begin(VitaStats::SECTION_UPLOAD);
+    const bool uploaded = SDL_UpdateTexture(texture, nullptr, rgbaPixels, width * 4);
+    VitaStats::End(VitaStats::SECTION_UPLOAD);
+    if (!uploaded)
     {
         static bool reported = false;
         if (!reported)
@@ -109,22 +131,39 @@ void VitaRenderer::DrawFrame(const unsigned char* rgbaPixels, int width, int hei
         }
     }
 
+    VitaStats::Begin(VitaStats::SECTION_DRAW);
+
     int outputWidth = 0;
     int outputHeight = 0;
     SDL_GetCurrentRenderOutputSize(Renderer, &outputWidth, &outputHeight);
 
-    // 1:1 and centred, with borders
     SDL_FRect dst;
-    dst.w = static_cast<float>(width);
-    dst.h = static_cast<float>(height);
-    if (outputWidth < width || outputHeight < height)
+    if (FillScreen && PrescaleTarget != nullptr && outputHeight > 0)
     {
-        // Shouldn't happen on a Vita, but scale down to fit rather than crop
-        const float scaleX = static_cast<float>(outputWidth) / width;
-        const float scaleY = static_cast<float>(outputHeight) / height;
-        const float scale = (scaleX < scaleY) ? scaleX : scaleY;
-        dst.w = width * scale;
-        dst.h = height * scale;
+        // Aspect correct and filling the height: 725x544 on a Vita
+        SDL_SetRenderTarget(Renderer, PrescaleTarget);
+        SDL_RenderTexture(Renderer, texture, nullptr, nullptr);
+        SDL_SetRenderTarget(Renderer, nullptr);
+
+        dst.h = static_cast<float>(outputHeight);
+        dst.w = (outputHeight == 544) ? static_cast<float>(FILL_WIDTH)
+                                      : static_cast<float>(outputHeight * width / height);
+        texture = PrescaleTarget;
+    }
+    else
+    {
+        // 1:1 and centred, with borders
+        dst.w = static_cast<float>(width);
+        dst.h = static_cast<float>(height);
+        if (outputWidth < width || outputHeight < height)
+        {
+            // Shouldn't happen on a Vita, but scale down to fit rather than crop
+            const float scaleX = static_cast<float>(outputWidth) / width;
+            const float scaleY = static_cast<float>(outputHeight) / height;
+            const float scale = (scaleX < scaleY) ? scaleX : scaleY;
+            dst.w = width * scale;
+            dst.h = height * scale;
+        }
     }
     dst.x = static_cast<float>(static_cast<int>((outputWidth - dst.w) * 0.5f));
     dst.y = static_cast<float>(static_cast<int>((outputHeight - dst.h) * 0.5f));
@@ -135,11 +174,13 @@ void VitaRenderer::DrawFrame(const unsigned char* rgbaPixels, int width, int hei
     {
         DrawVersionOverlay(outputWidth, outputHeight);
     }
+
+    VitaStats::End(VitaStats::SECTION_DRAW);
 }
 
 void VitaRenderer::DrawVersionOverlay(int outputWidth, int outputHeight)
 {
-    // Bottom right corner, which is in the black border with the 1:1 layout
+    // Bottom right corner, which is in the black border in both display modes
     const int textWidth = static_cast<int>(std::strlen(VERSION_OVERLAY_TEXT)) * SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
     const float x = static_cast<float>(outputWidth - textWidth - 4);
     const float y = static_cast<float>(outputHeight - SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE - 4);
@@ -150,7 +191,10 @@ void VitaRenderer::DrawVersionOverlay(int outputWidth, int outputHeight)
 
 void VitaRenderer::EndFrame()
 {
-    if (!SDL_RenderPresent(Renderer))
+    VitaStats::Begin(VitaStats::SECTION_PRESENT);
+    const bool presented = SDL_RenderPresent(Renderer);
+    VitaStats::End(VitaStats::SECTION_PRESENT);
+    if (!presented)
     {
         static bool reported = false;
         if (!reported)
@@ -159,27 +203,7 @@ void VitaRenderer::EndFrame()
             reported = true;
         }
     }
-    LogFrameStats();
-}
-
-void VitaRenderer::LogFrameStats()
-{
-    // Presented frames per second, at 5s, 30s and then every 2 minutes
-    ++StatsFrames;
-    const uint64_t now = SDL_GetTicksNS();
-    const uint64_t elapsed = now - StatsStartNs;
-    const uint64_t interval = (StatsReports == 0) ? 5000000000ull : (StatsReports == 1) ? 25000000000ull : 120000000000ull;
-    if (elapsed < interval)
-    {
-        return;
-    }
-
-    const double fps = static_cast<double>(StatsFrames) * 1e9 / static_cast<double>(elapsed);
-    VitaLog::Write("Presented %llu frames in %.2f s (%.2f fps)",
-                   static_cast<unsigned long long>(StatsFrames), elapsed / 1e9, fps);
-    StatsStartNs = now;
-    StatsFrames = 0;
-    ++StatsReports;
+    VitaStats::FramePresented();
 }
 
 void VitaRenderer::DisplaySetVSync(bool enabled)
@@ -193,4 +217,10 @@ void VitaRenderer::DisplaySetVSync(bool enabled)
     {
         VitaLog::Write("SDL_SetRenderVSync failed: %s", SDL_GetError());
     }
+}
+
+void VitaRenderer::SetFillScreen(bool enabled)
+{
+    VitaLog::Write("Screen mode: %s", enabled ? "fill 725x544" : "1:1");
+    FillScreen = enabled;
 }

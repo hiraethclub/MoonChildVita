@@ -69,10 +69,8 @@ if [[ "$CLEAN" == "1" ]]; then
     rm -rf "${BUILD_DIR}"
 fi
 
-CONFIGURE_ARGS=(--preset vita -DMOONCHILD_GIT_HASH="${GIT_HASH}")
-if [[ -n "${MOONCHILD_VITA_VERSION:-}" ]]; then
-    CONFIGURE_ARGS+=(-DMOONCHILD_VITA_VERSION="${MOONCHILD_VITA_VERSION}")
-fi
+# Always passed, so an override from an earlier run doesn't stick in the cache
+CONFIGURE_ARGS=(--preset vita -DMOONCHILD_GIT_HASH="${GIT_HASH}" -DMOONCHILD_VITA_VERSION="${MOONCHILD_VITA_VERSION:-}")
 
 echo "${R_LOG}Configuring the game... (Vita / Release)${R_0}"
 cmake "${CONFIGURE_ARGS[@]}"
