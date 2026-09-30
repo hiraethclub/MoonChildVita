@@ -40,9 +40,9 @@ bash Scripts/BuildGameVita.sh             # add "Clean" for a fresh build dir
 - Assets (graphics, audio, music, movies): CC BY-NC 4.0. Graphics by Metin Seven, music and sound by Ramon Braumuller. Redistribution in a free, non-commercial VPK with attribution is allowed; LICENSE and README (credits) are bundled inside the VPK.
 - The fork's original initial commit had an AGPL-3.0 LICENSE; it was replaced by upstream's dual licence during the history merge.
 
-## Known issues / risks (unverified on hardware)
+## Known issues / risks
 
-- Nothing has been run on a Vita yet (Phase 1).
+- 0.1.0 (b26769a) confirmed by the user to boot and play correctly on real hardware. No log reviewed yet.
 - `savefile()` in `mc.cpp` writes via `FullPath` into `app0:` (read-only). It is only used by the recorder/editor paths, not normal play.
 - Touch-to-mouse emulation is still on (inherited from `SDL3Window`); to be revisited in Phase 2.
 - Controls use the shared SDL3 gamepad mapping (Cross jump, Square action, Circle back, Start, Select back); Phase 2 will tune it.
