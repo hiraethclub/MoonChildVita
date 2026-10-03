@@ -1,6 +1,6 @@
 # Vita builds
 
-GitHub rejects files over 100 MB, so each VPK is split into parts. Join them on a PC, then copy the `.vpk` to the Vita and install it with VitaShell. Replace `NAME` below with the file name without `.partNNN`, for example `MoonChildFE-vita-0.2.0-d7ee476.vpk`.
+GitHub rejects files over 100 MB, so each VPK is split into parts. Join them on a PC, then copy the `.vpk` to the Vita and install it with VitaShell. Replace `NAME` below with the file name without `.partNNN`, for example `MoonChildFE-vita-0.3.0-19aaeee.vpk`.
 
 Windows (Command Prompt, in this folder):
 
