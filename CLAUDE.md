@@ -13,7 +13,7 @@ bash Scripts/BuildGameVita.sh             # add "Clean" for a fresh build dir
 - In the cloud session the Docker daemon may need starting first: `nohup dockerd >/tmp/dockerd.log 2>&1 &`, then wait for `docker info`.
 - Output: `Bin/Vita/MoonChildFE-vita-<version>-<shorthash>.vpk` plus the matching unstripped `.elf` (keep it for symbolising crash dumps).
 - CMake preset: `vita` / `build-vita-release` (single config Ninja, required because `vita_create_self` expects the ELF in the binary dir). Toolchain wrapper `CMake/Toolchains/Vita.cmake` includes `$VITASDK/share/vita.toolchain.cmake`.
-- Port version default lives in `CMake/Platforms/Vita.cmake` (`MOONCHILD_VITA_VERSION_DEFAULT`); the `MOONCHILD_VITA_VERSION` env var overrides it (the script always passes it, empty or not, so an old override can't stick in the CMake cache). Bump the default for every build handed over. APP_VER in param.sfo is derived from it (0.2.0 -> 00.20).
+- Port version default lives in `CMake/Platforms/Vita.cmake` (`MOONCHILD_VITA_VERSION_DEFAULT`); the `MOONCHILD_VITA_VERSION` env var overrides it (the script always passes it, empty or not, so an old override can't stick in the CMake cache). Bump the default for every build handed over. APP_VER in param.sfo is derived from it (0.3.0 -> 00.30).
 - Title ID: `MCFE01997`.
 - Desktop builds are unaffected; verified with `bash Scripts/BuildGameUnix.sh LinuxX64`.
 - CI: `.github/workflows/vita.yml` builds on every push and uploads the VPK + ELF as the `MoonChildFE-Vita` artifact.
@@ -28,6 +28,7 @@ bash Scripts/BuildGameVita.sh             # add "Clean" for a fresh build dir
 - Paths: data from `app0:data/`, saves/settings/log in `ux0:data/MoonChildFE/`.
 - Heap: `_newlib_heap_size_user` = 192 MB, main thread stack 2 MB (`Platform/Vita/VitaPlatform.cpp`). CPU/GPU clocks set to 444/222/222/166 MHz at startup.
 - Screen mode: the game's own fullscreen toggle is enabled on Vita (`MOONCHILD_FULLSCREEN_OPTION` in `globals.hpp`, defined for desktop and Vita) and shown as `SCREEN : 1:1 / FILL` in the VIDEO menu. `Cvideo::set_fullscreen` routes to `VitaRenderer::SetFillScreen`. Default 1:1 (`fullscreenflg=0` on Vita). Fill is 725x544 using sharp bilinear: nearest 2x into a 1280x960 target, then linear down. SDL's GXM driver treats `SDL_SCALEMODE_PIXELART` as nearest, so that mode isn't used. Stored in the existing `mc_opts.dat` slot; a 13-slot file from 0.1.0 is still read correctly.
+- Movies: on Vita the VIDEO menu has `MOVIES : ON/OFF` (new `menuf1225`, slot 3, reusing the game's previously unused `animsontxt`/`animsofftxt`); it toggles the existing `animsflg`, which `startmovie()` already honours and `mc_opts.dat` already saves in slot 0. Default OFF on Vita (`animsflg=0`). Upstream has no menu item for it on any platform; desktop is unchanged.
 - Touch-to-mouse is off on Vita (`SDL_HINT_TOUCH_MOUSE_EVENTS` = 0 in `SDL3Window.cpp`); the menus work with the buttons.
 - Controls (unchanged, shared SDL3 mapping): D-pad/left stick move, Cross jump, Square shoot (`CB_ACTION`), Start pause, Circle/Select back. In the original game, shooting only does anything while flying (`hoi_fly_live` + `shootenabledflg`) and in the world 4 boss fight, so walking sections only use move and jump. Up is only separate from jump while flying.
 - Version overlay: `v<version> <hash>` drawn with SDL's debug font in the bottom right border whenever `ingameflg == 0` (title sequence and menus).
@@ -46,7 +47,8 @@ bash Scripts/BuildGameVita.sh             # add "Clean" for a fresh build dir
 ## Known issues / risks
 
 - 0.1.0 (b26769a) boots and plays on real hardware. Its log showed: audio device 44100 Hz S16 stereo, 1024 frames; in-game only 41-45 presents/s (title 51) against the 60 Hz tick rate of the default VSYNC game speed; the intro movie (640x480 MPEG-1, 25 fps) presented ~2.7 frames/s and the user saw no movie. 0.2.0 adds the timing breakdown to find out why before changing anything.
+- 0.2.0 log (intro only): movie decoding took ~220 ms per present at the 5-tick catch-up cap, i.e. ~22 game ticks/s instead of 60, 4.4 presents/s, main thread CPU 95%+. That is ~105 ms per 640x480 video frame (decode + YUV->RGB + copy) against a 40 ms budget for 25 fps; an x86 benchmark of the same file puts decode at ~65% of that cost, so trimming the copy alone can't reach full speed. Hence MOVIES defaults to OFF on Vita (0.3.0). Texture upload measured 5.2 ms per present. No in-game timing captured yet.
 - `savefile()` in `mc.cpp` writes via `FullPath` into `app0:` (read-only). It is only used by the recorder/editor paths, not normal play.
 - Audio: the game opens a 44.1 kHz float stream; SDL's Vita driver converts to S16 and, because the main port only accepts 48 kHz, uses the BGM port at 44.1 kHz. Speed/crackle unverified on hardware; the log records the device format.
-- pl_mpeg FMV decoding speed on the Vita CPU is unverified; the game's existing MOVIES: ON/OFF option can skip them.
+- FMVs play at roughly a third of real speed on Vita (see above). Faster options if ever wanted: decode on a second core, or re-encode to H.264 for the hardware decoder (replaces pl_mpeg on Vita, needs the user's approval).
 - `std::chrono::steady_clock` and `std::this_thread::sleep_for` drive the main loop timing; if they misbehave on Vita newlib, the frame rate lines in the log will show it.

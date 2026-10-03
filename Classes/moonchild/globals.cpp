@@ -85,7 +85,12 @@ UINT16 restartpara;
 UINT16 streepflg;
 
 UINT16 vgaflg=1;
+#ifdef MOONCHILD_VITA
+// The Vita can't decode the 640x480 movies at full speed, so they start off there
+UINT16 animsflg=0;
+#else
 UINT16 animsflg=1;
+#endif
 UINT16 easiervisualsflg=0;
 UINT16 easiershootflg=0;
 #if defined(MOONCHILD_VITA)

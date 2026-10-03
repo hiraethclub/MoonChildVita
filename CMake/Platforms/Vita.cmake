@@ -2,7 +2,7 @@ include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 # Vita port versioning, separate from the game's own version
 # Bump MOONCHILD_VITA_VERSION_DEFAULT for every build handed over
-set(MOONCHILD_VITA_VERSION_DEFAULT "0.2.0")
+set(MOONCHILD_VITA_VERSION_DEFAULT "0.3.0")
 set(MOONCHILD_VITA_VERSION "" CACHE STRING "Override the Vita port version (empty uses the default)")
 if(MOONCHILD_VITA_VERSION STREQUAL "")
     set(MOONCHILD_VITA_VERSION_EFFECTIVE "${MOONCHILD_VITA_VERSION_DEFAULT}")

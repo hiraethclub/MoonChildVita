@@ -291,6 +291,9 @@ void menuf1221(void);
 void menuf1222(void);
 void menuf1223(void);
 void menuf1224(void);
+#ifdef MOONCHILD_VITA
+void menuf1225(void);
+#endif
 void menuf123(void);
 void menuf1231(void);
 void menuf1232(void);
@@ -638,7 +641,13 @@ char *easyvisofftxt = "   SAFE GFX : OFF   ";
 
 MENU_ITEM menu122[] =
 {
-#ifdef MOONCHILD_FULLSCREEN_OPTION
+#if defined(MOONCHILD_VITA)
+  {   4, menuf1221, fullscreenontxt },
+  {   6, menuf1222, gamespeedmenu_vs },
+  {   8, menuf1223, easyvisontxt },
+  {  10, menuf1225, animsofftxt },
+  {  12, menuf1224, "=      RETURN       "},
+#elif defined(MOONCHILD_FULLSCREEN_OPTION)
   {   5, menuf1221, fullscreenontxt },
   {   7, menuf1222, gamespeedmenu_vs },
   {   9, menuf1223, easyvisontxt },
@@ -1158,6 +1167,9 @@ void load_options(void)
                               : (gamespeedflg == MC_GAME_SPEED_60HZ) ? gamespeedmenu_60
                                                                     : gamespeedmenu_vs;
   menu122[easierSlot].menutext = easiervisualsflg ? easyvisontxt : easyvisofftxt;
+#ifdef MOONCHILD_VITA
+  menu122[3].menutext = animsflg ? animsontxt : animsofftxt;
+#endif
   video->set_vsync(gamespeedflg == MC_GAME_SPEED_VSYNC ? 1 : 0);
   menu123[2].menutext = altmenutuneflg ? altmenuontxt : altmenuofftxt;
   menu1243[0].menutext = easiershootflg ? easiershoot_on : easiershoot_off;
@@ -7569,6 +7581,18 @@ void menuf1223(void)
   start_afterbuilditem = easierSlot;
   menuleavefunc = (HEARTBEAT_FN) MC_buildmenu;
 }
+
+#ifdef MOONCHILD_VITA
+void menuf1225(void)
+{
+  const int moviesSlot = 3;
+
+  animsflg ^= 1;
+  menu122[moviesSlot].menutext = animsflg ? animsontxt : animsofftxt;
+  start_afterbuilditem = moviesSlot;
+  menuleavefunc = (HEARTBEAT_FN) MC_buildmenu;
+}
+#endif
 
 void menuf1224(void)
 {
